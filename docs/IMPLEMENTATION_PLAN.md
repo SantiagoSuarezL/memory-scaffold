@@ -8,7 +8,7 @@ PLAN DE TRABAJO — Plantilla de Memoria para Agentes
 | D3 | El script instala **13 archivos**: 9 de memoria + 3 protocolos + 1 audit | Un solo comando deja el proyecto 100% listo. |
 | D4 | El script **no lee** `docs/`, **no puebla** contenido, **no inicializa** git | Frontera script/agente: lo determinista vs lo semántico. |
 | D5 | BOOTSTRAP.md se **reduce** a solo-poblar (la creación muere) | El script ya creó todo; el agente solo llena desde `docs/`. |
-| D6 | Los 3 protocolos + AUDIT llevan **marcadores de bloque** `<!-- scaffold:start -->` / `<!-- scaffold:end -->` desde el día 1 | Habilita `--upgrade` futuro sin tocar contenido de memoria. Los 9 archivos de memoria **no** llevan marcadores (el usuario los posee). |
+| D6 | Los 3 protocolos + AUDIT llevan **marcadores de bloque** `<!-- scaffold:system:start -->` / `<!-- scaffold:system:end -->` desde el día 1 | Habilita `--upgrade` (implementado en Fase 4) sin tocar contenido de memoria. Los 9 archivos de memoria **no** llevan marcadores (el usuario los posee). |
 | D7 | Encoding UTF-8, line endings LF, `.gitattributes` con `* text=auto eol=lf` | Evita el clásico dolor CRLF en Windows/git. |
 | D8 | Idioma: español, voseo rioplatense (voz actual del usuario) | Consistencia con los protocolos existentes. |
 
@@ -41,7 +41,8 @@ memory-scaffold/                    # nombre tentativo — decisión libre del u
 ├── tests/
 │   ├── test_render.py              # placeholders, marcadores
 │   ├── test_install.py             # escenarios de instalación
-│   └── test_safety.py              # no-sobrescritura, casos edge
+│   ├── test_safety.py              # no-sobrescritura, casos edge
+│   └── test_upgrade.py             # semántica de --upgrade (Fase 4)
 └── docs/
     └── IMPLEMENTATION_PLAN.md      # este documento (meta: la plantilla nace con su propio método)
 
@@ -72,12 +73,13 @@ Nota de diseño: INDEX.md debe categorizar los 13 archivos en tres clases de lec
 
 3.1 Interfaz CLI
 
-python3 bootstrap.py [--project PATH] [--force] [--dry-run] [--verbose]
+python3 bootstrap.py [--project PATH] [--force] [--dry-run] [--verbose] [--upgrade]
 
 --project PATH   Directorio destino. Default: directorio actual.
 --force          Permite sobrescribir archivos existentes (ver 3.4).
 --dry-run        Muestra qué haría sin escribir nada. Imprime árbol resultante.
 --verbose        Log detallado de cada archivo procesado.
+--upgrade        Reemplaza solo bloques scaffold:system en destinos existentes (no toca memoria).
 
 Sin flags de idioma, sin flags de selección de archivos: la plantilla es opinionada, instala todo o nada. La configurabilidad es deuda; el usuario es uno.
 
@@ -132,10 +134,11 @@ Los archivos de memoria (memory/) con cualquier contenido no-vacío son siempre 
 No lee ni interpreta docs/ del destino.
 No ejecuta git init ni ningún comando git mutante.
 No instala/configura graphify.
-No modifica AGENTS.md/CLAUDE.md del destino (futuro: ver Fase 4).
+No modifica AGENTS.md/CLAUDE.md del destino. Decisión de Fase 4: el recordatorio automático se
+descartó — el contexto se carga manual en cada sesión.
 
 4. Especificación de templates — archivos de sistema
-Estos cuatro llevan marcadores <!-- scaffold:system:start --> / <!-- scaffold:system:end --> envolviendo todo su contenido (para --upgrade futuro: reemplazo completo del archivo de sistema).
+Estos cuatro llevan marcadores <!-- scaffold:system:start --> / <!-- scaffold:system:end --> envolviendo todo su contenido (para --upgrade, Fase 4: reemplazo solo del bloque scaffold, sin tocar el resto).
 
 4.1 BOOTSTRAP.md (rediseño completo — nueva versión)
 Fuente: el BOOTSTRAP actual del usuario, con los Pasos 1 y 5 eliminados (los hace el script). Estructura de la nueva versión:
@@ -262,9 +265,17 @@ Fase 3 — Validación en condiciones reales
 Bootstrapear un proyecto real nuevo de punta a punta: script → GLM ejecuta BOOTSTRAP → una sesión normal con INICIO/SALIDA → un audit de drift.
 DoD: el usuario confirma que el flujo reemplaza su proceso manual actual sin pérdidas.
 
-Fase 4 — Futuro (especificado, NO implementar ahora)
---upgrade: reemplaza solo bloques scaffold:system en destinos existentes.
-Auto-append de recordatorio en AGENTS.md del destino (estilo agent-work-mem: "este proyecto usa .agent/memory/...").
+Fase 4 — Implementada
+--upgrade: reemplaza solo bloques scaffold:system en destinos existentes. Semántica exacta:
+  (a) sistema con marcadores → reemplaza el bloque;
+  (b) sistema sin marcadores → skip + reporta "legacy: migrar manualmente (borrar el archivo y
+      re-correr --upgrade lo instala con marcadores)";
+  (c) sistema ausente → se crea desde template (aditivo, consistente con §3.4).
+  --force NO gana la capacidad de pisar sistemas sin marcadores (su semántica sigue siendo §3.5).
+  Los 9 archivos de memoria nunca se tocan (invariante). Soporta --dry-run y --verbose.
+Recordatorio en AGENTS.md/CLAUDE.md: DESCARTADO por decisión del usuario. El contexto se carga
+manualmente al abrir sesión ("lee .agent/memory/PROTOCOLO_INICIO.md") para verificar que el modelo
+realmente tiene contexto; no se auto-modifica el flujo hacia opencode/claude/codex.
 
 7. Riesgos y notas de mantenibilidad
 | Riesgo | Mitigación |

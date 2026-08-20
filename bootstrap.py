@@ -91,6 +91,22 @@ def wrap_markers(content, is_system):
     return "%s\n%s\n%s\n" % (MARKER_START, body, MARKER_END)
 
 
+def extract_block(content):
+    start = content.find(MARKER_START)
+    end = content.find(MARKER_END, start)
+    if start == -1 or end == -1:
+        raise ValueError("no se encontraron ambos marcadores scaffold:system")
+    return content[start + len(MARKER_START):end]
+
+
+def replace_block(content, new_block):
+    start = content.find(MARKER_START)
+    end = content.find(MARKER_END, start)
+    if start == -1 or end == -1:
+        raise ValueError("no se encontraron ambos marcadores scaffold:system")
+    return content[:start + len(MARKER_START)] + new_block + content[end:]
+
+
 def render_file(template_path, is_system, values):
     content = template_path.read_text(encoding="utf-8")
     content = render_template(content, values)
@@ -286,6 +302,62 @@ def run_existing(project_dir, templates_dir, args):
     return 0
 
 
+def run_upgrade(project_dir, templates_dir, args):
+    memory_dir = project_dir / ".agent" / "memory"
+    values = placeholder_values(project_dir)
+    plan = plan_files(templates_dir, values)
+
+    created = []
+    replaced = []
+    unchanged = []
+    legacy = []
+
+    for name, rendered, is_system in plan:
+        if not is_system:
+            continue
+        target = memory_dir / name
+        if not target.exists():
+            created.append(name)
+            if not args.dry_run:
+                target.write_text(rendered, encoding="utf-8", newline="\n")
+                if args.verbose:
+                    print("  creando %s" % target)
+            continue
+        text = target.read_text(encoding="utf-8")
+        if MARKER_START not in text or MARKER_END not in text:
+            legacy.append(name)
+            continue
+        updated = replace_block(text, extract_block(rendered))
+        if updated == text:
+            unchanged.append(name)
+            continue
+        replaced.append(name)
+        if not args.dry_run:
+            target.write_text(updated, encoding="utf-8", newline="\n")
+            if args.verbose:
+                print("  reemplazando bloque de %s" % target)
+
+    print("Upgrade de archivos de sistema en %s" % memory_dir)
+    if created:
+        print("Creados (no existían):")
+        for name in created:
+            print("  + %s" % name)
+    if replaced:
+        print("Bloque scaffold actualizado:")
+        for name in replaced:
+            print("  ~ %s" % name)
+    if unchanged:
+        print("Sin cambios (%d): %s" % (len(unchanged), ", ".join(unchanged)))
+    if legacy:
+        print("Legacy — migrar manualmente (borrar el archivo y re-correr --upgrade para instalarlo con marcadores):")
+        for name in legacy:
+            print("  ! %s" % name)
+    if args.dry_run:
+        print("(--dry-run: no se escribió nada)")
+    print("Los 9 archivos de memoria no se tocaron (invariante).")
+    return 0
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog="bootstrap.py",
@@ -295,6 +367,7 @@ def parse_args(argv):
     parser.add_argument("--force", action="store_true", help="Completa instalaciones parciales; jamás pisa memoria con contenido.")
     parser.add_argument("--dry-run", action="store_true", help="Muestra qué haría sin escribir nada.")
     parser.add_argument("--verbose", action="store_true", help="Log detallado de cada archivo procesado.")
+    parser.add_argument("--upgrade", action="store_true", help="Reemplaza solo los bloques scaffold:system de los archivos de sistema en destinos existentes (no toca memoria).")
     return parser.parse_args(argv)
 
 
@@ -304,6 +377,10 @@ def main(argv=None):
         check_python_version()
         project_dir = validate_project(args.project)
         memory_dir = project_dir / ".agent" / "memory"
+        if args.upgrade:
+            if not memory_dir.is_dir():
+                raise BootstrapError("No hay instalación previa en el destino; corré sin --upgrade para instalar.")
+            return run_upgrade(project_dir, TEMPLATES_DIR, args)
         if memory_dir.is_dir():
             return run_existing(project_dir, TEMPLATES_DIR, args)
         return run_install(project_dir, TEMPLATES_DIR, args)
