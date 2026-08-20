@@ -15,14 +15,14 @@ comportamiento y 1 protocolo de auditoría.
   git. Poblar (leer specs y volcar a la memoria) es trabajo del agente, guiado por
   `BOOTSTRAP.md`.
 - **Frontera de posesión clara.** Los 4 archivos "de sistema" (BOOTSTRAP, INICIO,
-  SALIDA, AUDIT) llevan marcadores `scaffold:system` que habilitan un `--upgrade`
-  futuro sin tocar el contenido. Los 9 archivos de memoria son del proyecto y se
+  SALIDA, AUDIT) llevan marcadores `scaffold:system` que habilitan `--upgrade`
+  sin tocar el contenido. Los 9 archivos de memoria son del proyecto y se
   protegen siempre: ninguna bandera los pisa.
 - **Determinista donde se puede, narrativo donde se debe.** El script garantiza
   estructura, encoding UTF-8 y line endings LF. El agente garantiza que la memoria
   se mantenga verdadera.
 
-## Flujo de uso (5 pasos)
+## Flujo de uso (6 pasos)
 
 1. **Cloná la plantilla** una vez en una ubicación fija: `git clone ... ~/tools/memory-scaffold`.
 2. **Bootstrapeá un proyecto destino**:
@@ -31,21 +31,30 @@ comportamiento y 1 protocolo de auditoría.
 3. **Poblar (una sola vez, al arrancar el proyecto)**: pedile al agente que ejecute
    `.agent/memory/BOOTSTRAP.md`. El agente lee `docs/` y completa `tech_stack.md`,
    `roadmap.md` e `INDEX.md`. No crea archivos: la estructura ya existe.
-4. **Trabajo diario**: el agente arranca leyendo `.agent/memory/INDEX.md` y sigue
-   `PROTOCOLO_INICIO.md`; al cerrar, sigue `PROTOCOLO_SALIDA.md` para mantener la
-   memoria al día (rotación de sesiones, reglas de oro, observaciones).
+4. **Trabajo diario**: el contexto se carga manual al abrir sesión — escribile al
+   agente `lee .agent/memory/PROTOCOLO_INICIO.md` para que arranque leyendo
+   `INDEX.md` y los archivos "Siempre". Al cerrar, el agente sigue
+   `PROTOCOLO_SALIDA.md` para mantener la memoria al día (rotación de sesiones,
+   reglas de oro, observaciones).
 5. **Auditar de vez en cuando** (cierre de fase o ~mensual): ejecutar
    `.agent/memory/AUDIT_DRIFT.md` para detectar desajustes entre la memoria y el código real.
+6. **Actualizar la plantilla en proyectos ya instalados** (cuando mejorés la
+   plantilla y quieras propagar cambios): `python3 bootstrap.py --upgrade --project /ruta`.
+   Reemplaza solo los bloques `scaffold:system` de los archivos de sistema; la
+   memoria nunca se toca. Archivos de sistema sin marcadores (instalaciones
+   manuales viejas) se reportan como "legacy" y se migran a mano.
 
 ## Uso del script
 
 ```
-python3 bootstrap.py [--project PATH] [--force] [--dry-run] [--verbose]
+python3 bootstrap.py [--project PATH] [--force] [--dry-run] [--verbose] [--upgrade]
 ```
 
 - `--project PATH` — directorio destino (default: actual).
 - `--force` — completa instalaciones parciales; jamás pisa memoria con contenido.
 - `--dry-run` — muestra el plan sin escribir nada.
 - `--verbose` — log detallado por archivo.
+- `--upgrade` — reemplaza solo los bloques `scaffold:system` de archivos de sistema
+  en destinos existentes (no toca memoria).
 
 Ver `docs/IMPLEMENTATION_PLAN.md` para la especificación completa.
